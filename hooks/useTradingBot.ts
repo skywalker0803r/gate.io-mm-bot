@@ -71,7 +71,7 @@ export const useTradingBot = () => {
   // Real Trading State
   const openOrdersRef = useRef<OpenOrder[]>([]);
   const lastStrategyRunTimeRef = useRef<number>(0);
-  const STRATEGY_THROTTLE = 10000; // 10s as per python bot
+  const STRATEGY_THROTTLE = 60000; // 60s as per python bot
 
   // Mock State for Simulation
   const simOrdersRef = useRef<Array<any>>([]);
