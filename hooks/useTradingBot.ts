@@ -294,7 +294,7 @@ export const useTradingBot = () => {
   };
 
   // --- PROFIT TARGET MONITORING ---
-  const checkProfitTarget = useCallback(() => {
+  const checkProfitTarget = useCallback(async () => {
     const c = configRef.current;
     const s = stateRef.current;
     
@@ -306,19 +306,33 @@ export const useTradingBot = () => {
     if (profitSinceStart >= c.profitTargetUSDT) {
       addLog(`🎯 達到盈利目標! 獲利: ${profitSinceStart.toFixed(2)} USDT (目標: ${c.profitTargetUSDT} USDT)`, 'SUCCESS');
       
-      // Close all positions and cancel all orders
-      cancelAllOrders();
+      // 1. First cancel all pending orders
+      addLog(`📋 正在撤銷所有掛單...`, 'INFO');
+      await cancelAllOrders();
       
-      // Stop the bot
+      // 2. Close all existing positions to lock in profits
+      if (s.longPosition > 0) {
+        addLog(`📈 平倉多頭倉位: ${s.longPosition} 張`, 'INFO');
+        await placeOrder('sell', s.currentPrice, s.longPosition, true);
+      }
+      
+      if (s.shortPosition > 0) {
+        addLog(`📉 平倉空頭倉位: ${s.shortPosition} 張`, 'INFO');
+        await placeOrder('buy', s.currentPrice, s.shortPosition, true);
+      }
+      
+      addLog(`💰 所有倉位已平倉，浮盈已入袋！`, 'SUCCESS');
+      
+      // 3. Stop the bot
       if (wsRef.current) wsRef.current.close();
       setState(prev => ({ ...prev, isRunning: false }));
       
       if (c.autoRestart) {
-        addLog(`⏰ 將在 5 秒後自動重啟策略...`, 'INFO');
+        addLog(`⏰ 將在 10 秒後自動重啟策略...`, 'INFO');
         restartTimeoutRef.current = setTimeout(() => {
           addLog(`🔄 自動重啟策略`, 'INFO');
           startBot();
-        }, 5000);
+        }, 10000); // 延長到10秒確保平倉完成
       } else {
         addLog(`✋ 策略已停止，請手動重啟`, 'WARNING');
       }
@@ -408,7 +422,7 @@ export const useTradingBot = () => {
                     processSimulationFills(price); // Sim fill logic
                  }
                  runStrategy(price); // Trigger Strategy
-                 checkProfitTarget(); // Check profit target
+                 checkProfitTarget(); // Check profit target (async)
                }
              }
           }
