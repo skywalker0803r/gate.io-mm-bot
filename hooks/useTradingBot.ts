@@ -245,52 +245,51 @@ export const useTradingBot = () => {
     setState(prev => ({ ...prev, reservePrice: r_price, targetBid, targetAsk }));
 
     // 2. Execute Orders
+    // IMPORTANT: 先撤銷所有現有訂單，避免重複下單和訂單衝突
+    addLog('正在撤銷所有現有訂單...', 'INFO');
+    await cancelAllOrders(); // 撤銷所有訂單，包括開倉單和止盈單
+    
+    // 等待一小段時間確保撤單完成
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // 3. 根據倉位情況下新訂單
     // Logic: If we have positions > threshold, we try to close (ReduceOnly)
     // Else we place Open orders.
-    
-    // NOTE: This is a simplified "Re-quote" logic. 
-    // Real HFT would check existing orders, modify if close, or ignore if diff is small.
-    // Here we cancel all (for specific side) and replace to keep it simple and robust like the python bot.
 
     // --- LONG SIDE ---
     if (s.longPosition > c.positionThreshold) {
-       // Long too heavy -> Stop Buying, Place TP Sell
-       // Check if we need to TP
-       // For simplicity, we just ensure we have a TP order?
-       // Python bot logic: "If pos > threshold, place reduce only sell at r_price * ratio"
-       // We'll skip complex logic and just say: Stop buying.
-       await cancelAllOrders('buy'); 
+       // 多頭倉位過重 -> 停止買入，只保留止盈賣單
+       addLog(`多頭倉位 ${s.longPosition} 超過閾值 ${c.positionThreshold}，停止買入`, 'WARNING');
     } else {
-       // Normal operation: Place Buy Limit
-       // Only cancel/replace if price moved significantly? 
-       // For this demo, we cancel previous opens on this side and place new
-       await cancelAllOrders('buy');
+       // 正常操作：下買入限價單
+       addLog(`下買入限價單: ${c.initialQuantity}張 @ ${targetBid.toFixed(4)}`, 'INFO');
        await placeOrder('buy', targetBid, c.initialQuantity, false);
     }
 
     // --- SHORT SIDE ---
     if (s.shortPosition > c.positionThreshold) {
-       // Short too heavy -> Stop Selling
-       await cancelAllOrders('sell');
+       // 空頭倉位過重 -> 停止賣出
+       addLog(`空頭倉位 ${s.shortPosition} 超過閾值 ${c.positionThreshold}，停止賣出`, 'WARNING');
     } else {
-       await cancelAllOrders('sell');
+       // 正常操作：下賣出限價單
+       addLog(`下賣出限價單: ${c.initialQuantity}張 @ ${targetAsk.toFixed(4)}`, 'INFO');
        await placeOrder('sell', targetAsk, c.initialQuantity, false);
     }
 
     // --- TAKE PROFIT ORDERS ---
-    // In Python bot, it places TPs separately.
+    // 為現有倉位下止盈單
     if (s.longPosition > 0) {
        const tpPrice = price * (1 + c.takeProfitSpacing);
-       // We should check if we already have a TP order near this price
-       // For simplicity, place fresh TP if none exists?
-       // Or rely on the "cancelAll" logic? No, cancelAll clears TPs too.
-       // So we re-place TPs every cycle.
+       addLog(`下多頭止盈單: ${s.longPosition}張 @ ${tpPrice.toFixed(4)}`, 'INFO');
        await placeOrder('sell', tpPrice, s.longPosition, true);
     }
     if (s.shortPosition > 0) {
        const tpPrice = price * (1 - c.takeProfitSpacing);
+       addLog(`下空頭止盈單: ${s.shortPosition}張 @ ${tpPrice.toFixed(4)}`, 'INFO');
        await placeOrder('buy', tpPrice, s.shortPosition, true);
     }
+
+    addLog('策略執行完成', 'SUCCESS');
   };
 
   // --- PROFIT TARGET MONITORING ---
