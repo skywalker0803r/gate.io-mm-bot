@@ -15,6 +15,11 @@ export interface BotConfig {
   // Risk Management
   positionThreshold: number; // 500
   
+  // Profit Target Settings
+  enableProfitTarget: boolean; // 是否啟用盈利目標
+  profitTargetUSDT: number; // 盈利目標 USDT
+  autoRestart: boolean; // 達到目標後是否自動重啟
+  
   // Grid Specific
   gridSpacing: number; // 0.006 (0.6%)
   takeProfitSpacing: number; // 0.004 (0.4%)

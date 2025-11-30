@@ -34,6 +34,9 @@ export const useTradingBot = () => {
     strategy: StrategyType.AVELLANEDA,
     isSimulation: false,
     positionThreshold: 500,
+    enableProfitTarget: false,
+    profitTargetUSDT: 100,
+    autoRestart: true,
     gridSpacing: 0.006,
     takeProfitSpacing: 0.004,
     gamma: 1.0,
@@ -72,6 +75,10 @@ export const useTradingBot = () => {
 
   // Mock State for Simulation
   const simOrdersRef = useRef<Array<any>>([]);
+  
+  // Profit Target Tracking
+  const initialPnLRef = useRef<number>(0);
+  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { configRef.current = config; }, [config]);
@@ -286,6 +293,38 @@ export const useTradingBot = () => {
     }
   };
 
+  // --- PROFIT TARGET MONITORING ---
+  const checkProfitTarget = useCallback(() => {
+    const c = configRef.current;
+    const s = stateRef.current;
+    
+    if (!c.enableProfitTarget || !s.isRunning) return;
+    
+    const currentTotalPnL = s.realizedPnL + s.unrealizedPnL;
+    const profitSinceStart = currentTotalPnL - initialPnLRef.current;
+    
+    if (profitSinceStart >= c.profitTargetUSDT) {
+      addLog(`🎯 達到盈利目標! 獲利: ${profitSinceStart.toFixed(2)} USDT (目標: ${c.profitTargetUSDT} USDT)`, 'SUCCESS');
+      
+      // Close all positions and cancel all orders
+      cancelAllOrders();
+      
+      // Stop the bot
+      if (wsRef.current) wsRef.current.close();
+      setState(prev => ({ ...prev, isRunning: false }));
+      
+      if (c.autoRestart) {
+        addLog(`⏰ 將在 5 秒後自動重啟策略...`, 'INFO');
+        restartTimeoutRef.current = setTimeout(() => {
+          addLog(`🔄 自動重啟策略`, 'INFO');
+          startBot();
+        }, 5000);
+      } else {
+        addLog(`✋ 策略已停止，請手動重啟`, 'WARNING');
+      }
+    }
+  }, []);
+
 
   // --- WEBSOCKET CONNECTION ---
   const connectWebSocket = useCallback(() => {
@@ -369,6 +408,7 @@ export const useTradingBot = () => {
                     processSimulationFills(price); // Sim fill logic
                  }
                  runStrategy(price); // Trigger Strategy
+                 checkProfitTarget(); // Check profit target
                }
              }
           }
@@ -487,12 +527,30 @@ export const useTradingBot = () => {
       return;
     }
     
+    // Clear any existing restart timeout
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+    
+    // Record initial PnL for profit target calculation
+    initialPnLRef.current = state.realizedPnL + state.unrealizedPnL;
+    
     addLog(`啟動策略: ${config.strategy} [${config.isSimulation ? '模擬' : '實盤'}] | ${config.coinName}`, 'SUCCESS');
+    if (config.enableProfitTarget) {
+      addLog(`💰 盈利目標: ${config.profitTargetUSDT} USDT | 自動重啟: ${config.autoRestart ? '是' : '否'}`, 'INFO');
+    }
     setState(prev => ({ ...prev, isRunning: true, startTime: Date.now() }));
     connectWebSocket();
   };
 
   const stopBot = () => {
+    // Clear any existing restart timeout
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+    
     if (wsRef.current) wsRef.current.close();
     setState(prev => ({ ...prev, isRunning: false }));
     addLog('策略已停止', 'WARNING');

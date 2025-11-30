@@ -244,6 +244,62 @@ const ConfigForm: React.FC<Props> = ({ config, onChange, isRunning }) => {
              </div>
           </div>
         )}
+
+        {/* Profit Target Settings */}
+        <div className="bg-green-900/10 border border-green-500/20 rounded-lg p-4 space-y-3">
+          <h3 className="text-green-400 text-xs font-bold uppercase tracking-wider">盈利目標設置</h3>
+          
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                disabled={isRunning}
+                checked={config.enableProfitTarget}
+                onChange={(e) => handleChange('enableProfitTarget', e.target.checked)}
+                className="w-4 h-4 rounded border-dark-800 bg-dark-950 text-green-500 focus:ring-green-500"
+              />
+              <span className="text-sm text-gray-300">啟用盈利目標</span>
+            </label>
+          </div>
+
+          {config.enableProfitTarget && (
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div>
+                <label className="block text-[10px] text-gray-400 mb-1">盈利目標 (USDT)</label>
+                <input
+                  type="number"
+                  step="10"
+                  min="1"
+                  disabled={isRunning}
+                  value={config.profitTargetUSDT}
+                  onChange={(e) => handleChange('profitTargetUSDT', parseFloat(e.target.value))}
+                  className="w-full bg-dark-950 border border-dark-800 rounded px-2 py-1 text-sm text-white"
+                  placeholder="100"
+                />
+              </div>
+              <div className="flex items-center">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    disabled={isRunning}
+                    checked={config.autoRestart}
+                    onChange={(e) => handleChange('autoRestart', e.target.checked)}
+                    className="w-4 h-4 rounded border-dark-800 bg-dark-950 text-green-500 focus:ring-green-500"
+                  />
+                  <span className="text-xs text-gray-300">達標後自動重啟</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {config.enableProfitTarget && (
+            <div className="text-xs text-gray-500 bg-dark-950/50 rounded p-2">
+              <p>• 當累計盈利達到目標金額時，策略會自動關閉所有倉位</p>
+              <p>• 如啟用自動重啟，將在 5 秒後重新啟動策略</p>
+              <p>• 盈利計算包含已實現和未實現 PnL</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
